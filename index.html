@@ -361,11 +361,11 @@
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
   }
   .color-strip div {
-    transition: flex 0.4s;
+    transition: opacity 0.3s;
     cursor: pointer;
     position: relative;
   }
-  .color-strip div:hover { flex: 1.5 !important; }
+  .color-strip div:hover { opacity: 0.85; }
   .color-list {
     flex: 1;
     overflow-y: auto;
@@ -836,20 +836,101 @@
     .pv-metrics { grid-template-columns: repeat(3, 1fr); }
     .pv-metric:not(:last-child)::after { display: none; }
     .pv-cta-bar { flex-direction: column; text-align: center; }
+    .toolbar { flex-wrap: wrap; }
+    .toolbar-slider { width: 100px; }
   }
+
   /* ========================================
      响应式布局 - 手机设备（最大宽度 600px）
-     缩小间距，隐藏导航链接
+     全面适配小屏幕：工具栏、图片面板、色板、预览区、导出区
      ======================================== */
   @media (max-width: 600px) {
-    .site-header { padding: 1rem 1.2rem; }
-    .upload-zone { padding: 3rem 1.5rem; }
-    .upload-title { font-size: 1.3rem; }
-    .result-section { padding: 1rem; }
-    .toolbar { gap: 0.8rem; padding: 0.8rem 1rem; }
-    .pv-hero h2 { font-size: 1.6rem; }
+    .site-header { padding: 0.9rem 1rem; }
+    .site-subtitle { display: none; }
+    .upload-zone { padding: 2.8rem 1.2rem; }
+    .upload-icon { width: 64px; height: 64px; font-size: 1.5rem; margin-bottom: 1.2rem; }
+    .upload-title { font-size: 1.25rem; }
+    .upload-desc { font-size: 0.82rem; }
+    .upload-formats { margin-top: 1rem; }
+
+    .result-section { padding: 0.8rem; }
+
+    /* 工具栏：竖向堆叠 */
+    .toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.7rem;
+      padding: 0.8rem 1rem;
+    }
+    .toolbar-group { justify-content: space-between; }
+    .toolbar-slider { flex: 1; width: auto; }
+    .toolbar-select { flex: 1; }
+    .toolbar-spacer { display: none; }
+    .toolbar-btn { justify-content: center; width: 100%; }
+
+    /* 图片面板 */
+    .image-display { min-height: 180px; padding: 0.8rem; }
+    .image-display canvas { max-height: 260px; }
+    .image-meta { flex-wrap: wrap; gap: 0.4rem 0.8rem; font-size: 0.7rem; }
+
+    /* 色板 */
+    .palette-header { padding: 1rem 1rem 0; }
+    .color-strip-wrap { padding: 0.8rem 1rem; }
+    .color-strip { height: 36px; border-radius: 8px; }
+    .color-list { padding: 0 1rem 0.8rem; max-height: 320px; }
+    .color-card { gap: 0.6rem; padding: 0.55rem 0.3rem; }
+    .color-swatch { width: 36px; height: 36px; border-radius: 8px; }
+    .color-hex { font-size: 0.85rem; }
+    .color-name { font-size: 0.68rem; }
+    .color-detail { font-size: 0.66rem; }
+    .color-pct-bar { width: 40px; }
+    .color-pct-num { font-size: 0.66rem; }
+
+    /* 预览区 */
+    .pv-nav { padding: 0 1rem; height: 46px; }
+    .pv-nav-brand { font-size: 0.95rem; }
     .pv-nav-links { display: none; }
-    .pv-footer { flex-direction: column; gap: 0.3rem; text-align: center; }
+    .pv-nav-cta { font-size: 0.68rem; padding: 0.25rem 0.7rem; }
+    .pv-hero { padding: 2rem 1.2rem 1.8rem; }
+    .pv-hero-tag { font-size: 0.58rem; padding: 0.2rem 0.7rem; margin-bottom: 1rem; }
+    .pv-hero h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 0.6rem; }
+    .pv-hero p { font-size: 0.8rem; line-height: 1.7; margin-bottom: 1.4rem; }
+    .pv-hero-btns { flex-direction: column; }
+    .pv-btn-primary, .pv-btn-outline { width: 100%; text-align: center; }
+    .pv-hero-img { height: 170px; border-radius: 10px; }
+    .pv-hero-deco { width: 180px; height: 180px; }
+    .pv-hero-deco2 { width: 120px; height: 120px; }
+    .pv-metric { padding: 0.9rem 0.6rem; }
+    .pv-metric-num { font-size: 1.35rem; }
+    .pv-metric-label { font-size: 0.58rem; letter-spacing: 1px; }
+    .pv-feature { padding: 1.2rem 1rem; }
+    .pv-feature-icon { width: 36px; height: 36px; font-size: 0.85rem; border-radius: 8px; }
+    .pv-feature h4 { font-size: 0.85rem; }
+    .pv-feature p { font-size: 0.72rem; }
+    .pv-cta-bar { padding: 1.4rem 1.2rem; }
+    .pv-cta-bar-btn { width: 100%; text-align: center; }
+    .pv-footer { flex-direction: column; gap: 0.3rem; text-align: center; padding: 1rem; }
+
+    /* 标题 */
+    .section-title { font-size: 1.15rem; }
+    .section-desc { font-size: 0.78rem; margin-bottom: 1.2rem; }
+
+    /* 导出区 */
+    .export-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.7rem;
+    }
+    .export-copy-btn { width: 100%; justify-content: center; }
+    .export-code { font-size: 0.7rem; padding: 0.8rem 1rem; max-height: 240px; }
+
+    /* 说明卡片 */
+    .explain-box { padding: 1rem 1.2rem; }
+    .explain-box h3 { font-size: 0.95rem; margin-bottom: 0.8rem; }
+    .explain-items { gap: 0.6rem; }
+    .explain-item { font-size: 0.76rem; line-height: 1.65; flex-direction: column; gap: 0.15rem; }
+    .explain-item .ei-label { white-space: normal; }
+    .explain-item code { font-size: 0.72rem; }
   }
   /* ========================================
      无障碍支持 - 减少动画偏好设置
@@ -1409,12 +1490,12 @@ function renderPreview() {
       <div class="pv-nav" style="background:${darkest.hex};color:${navText}">
         <span class="pv-nav-brand">Atelier</span>
         <div class="pv-nav-links">
-          <a href="#" style="color:${navText}">作品</a>
-          <a href="#" style="color:${navText}">服务</a>
-          <a href="#" style="color:${navText}">关于</a>
-          <a href="#" style="color:${navText}">日志</a>
+          <span style="color:${navText}">作品</span>
+          <span style="color:${navText}">服务</span>
+          <span style="color:${navText}">关于</span>
+          <span style="color:${navText}">日志</span>
         </div>
-        <a href="#" class="pv-nav-cta" style="background:${accent.hex};color:${accentText}">联系我们</a>
+        <span class="pv-nav-cta" style="background:${accent.hex};color:${accentText}">联系我们</span>
       </div>
 
       <!-- Hero -->

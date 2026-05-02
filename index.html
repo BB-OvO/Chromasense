@@ -5,13 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chromasense — 图片色彩提取</title>
 <meta name="description" content="Chromasense 是一款在线图片色彩提取工具，支持拖拽上传、智能色彩分析、配色预览和 CSS 变量导出，帮助设计师和开发者快速提取图片主色并生成配色方案。">
-<meta name="keywords" content="色彩提取,配色工具,颜色分析,CSS变量,图片取色,调色板生成,Median Cut算法">
+<meta name="keywords" content="色彩提取,配色工具,颜色分析,CSS变量,图片取色,调色板生成,Median Cut算法,在线取色器,图片配色,设计工具">
 <meta name="author" content="Chromasense">
+<meta name="robots" content="index, follow">
 <meta name="theme-color" content="#e8edf2">
+<link rel="canonical" href="https://bb-ovo.github.io/Chromasense/">
 <meta property="og:title" content="Chromasense — 图片色彩提取">
 <meta property="og:description" content="拖入图片，解读色彩。智能提取图片主色，生成配色方案，支持 CSS 变量一键导出。">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="zh_CN">
+<meta property="og:url" content="https://bb-ovo.github.io/Chromasense/">
+<meta property="og:site_name" content="Chromasense">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Chromasense — 图片色彩提取">
+<meta name="twitter:description" content="拖入图片，解读色彩。智能提取图片主色，生成配色方案，支持 CSS 变量一键导出。">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Chromasense",
+  "description": "在线图片色彩提取工具，支持拖拽上传、智能色彩分析、配色预览和 CSS 变量导出",
+  "url": "https://bb-ovo.github.io/Chromasense/",
+  "applicationCategory": "DesignApplication",
+  "operatingSystem": "Web",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "Chromasense"
+  }
+}
+</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 16L16 2A14 14 0 0 1 29.32 11.67Z' fill='%23dbbb98' stroke='%23e8edf2' stroke-width='0.6'/%3E%3Cpath d='M16 16L29.32 11.67A14 14 0 0 1 24.23 27.33Z' fill='%2395a5bd' stroke='%23e8edf2' stroke-width='0.6'/%3E%3Cpath d='M16 16L24.23 27.33A14 14 0 0 1 7.77 27.33Z' fill='%23614226' stroke='%23e8edf2' stroke-width='0.6'/%3E%3Cpath d='M16 16L7.77 27.33A14 14 0 0 1 2.69 11.67Z' fill='%23726445' stroke='%23e8edf2' stroke-width='0.6'/%3E%3Cpath d='M16 16L2.69 11.67A14 14 0 0 1 16 2Z' fill='%234f6479' stroke='%23e8edf2' stroke-width='0.6'/%3E%3Ccircle cx='16' cy='16' r='5.5' fill='%23e8edf2'/%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -267,6 +294,16 @@
     border-color: var(--deep-brown);
     color: var(--deep-brown);
     background: rgba(97,66,38,0.04);
+  }
+  .toolbar-btn.primary {
+    background: var(--deep-brown);
+    color: #ffffff;
+    border-color: var(--deep-brown);
+  }
+  .toolbar-btn.primary:hover {
+    background: #4f3520;
+    border-color: #4f3520;
+    color: #ffffff;
   }
 
   /* ========================================
@@ -823,6 +860,106 @@
   .hidden-canvas { position: absolute; left: -9999px; top: -9999px; }
 
   /* ========================================
+     配色卡预览模态框
+     ======================================== */
+  .palette-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .palette-modal {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 900px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: modalIn 0.3s ease-out;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  .palette-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .palette-modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--deep-brown);
+  }
+  .palette-modal-close {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(79,100,121,0.08);
+    color: var(--steel);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .palette-modal-close:hover { background: rgba(79,100,121,0.15); }
+  .palette-modal-preview {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  .palette-modal-preview canvas {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
+  .palette-modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+  }
+  .palette-modal-btn {
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .palette-modal-btn.secondary {
+    background: transparent;
+    border: 1.5px solid rgba(79,100,121,0.15);
+    color: var(--steel);
+  }
+  .palette-modal-btn.secondary:hover {
+    border-color: var(--deep-brown);
+    color: var(--deep-brown);
+  }
+  .palette-modal-btn.primary {
+    background: var(--deep-brown);
+    border: 1.5px solid var(--deep-brown);
+    color: #ffffff;
+  }
+  .palette-modal-btn.primary:hover {
+    background: #4f3520;
+    border-color: #4f3520;
+  }
+
+  /* ========================================
      响应式布局 - 平板设备（最大宽度 900px）
      单列布局，堆叠 Hero 和特性卡片
      ======================================== */
@@ -997,6 +1134,14 @@
       </select>
     </div>
     <div class="toolbar-spacer"></div>
+    <button class="toolbar-btn primary" id="generatePaletteBtn">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+        <polyline points="21 15 16 10 5 21"></polyline>
+      </svg>
+      生成配色卡
+    </button>
     <button class="toolbar-btn" id="reuploadBtn"><i class="fas fa-redo"></i> 重新上传</button>
   </div>
 
@@ -1644,6 +1789,113 @@ countSlider.addEventListener('change', () => { if (state.originalPixels.length >
 
 // 排序方式变化时重新排序
 document.getElementById('sortSelect').addEventListener('change', () => { if (state.colors.length > 0) sortAndRender(); });
+
+/* 生成配色卡按钮 */
+document.getElementById('generatePaletteBtn').addEventListener('click', () => {
+  if (!state.colors || state.colors.length === 0) {
+    alert('请先上传图片并提取色板');
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const dpr = 2;
+  const width = 800;
+  const height = 500;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.scale(dpr, dpr);
+
+  ctx.fillStyle = '#f8f9fa';
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = '#4f6479';
+  ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.fillText('Chromasense 配色卡', 40, 55);
+
+  const stripHeight = 80;
+  const stripY = 90;
+  const stripWidth = width - 80;
+  const colorWidth = stripWidth / state.colors.length;
+
+  state.colors.forEach((color, index) => {
+    ctx.fillStyle = color.hex;
+    ctx.fillRect(40 + index * colorWidth, stripY, colorWidth, stripHeight);
+  });
+
+  const colors = state.colors;
+  const cols = Math.min(colors.length, 5);
+  const rows = Math.ceil(colors.length / cols);
+  const cardWidth = (width - 80) / cols;
+  const cardHeight = 100;
+  const startY = stripY + stripHeight + 50;
+
+  colors.forEach((color, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = 40 + col * cardWidth;
+    const y = startY + row * cardHeight;
+
+    ctx.fillStyle = color.hex;
+    ctx.fillRect(x, y, 50, 50);
+
+    ctx.fillStyle = '#4f6479';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(color.hex.toUpperCase(), x + 60, y + 22);
+
+    ctx.fillStyle = '#614226';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(color.name, x + 60, y + 42);
+
+    ctx.fillStyle = '#a3b4c4';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`占比 ${color.percentage}%`, x + 60, y + 60);
+  });
+
+  const modalOverlay = document.createElement('div');
+  modalOverlay.className = 'palette-modal-overlay';
+  modalOverlay.innerHTML = `
+    <div class="palette-modal">
+      <div class="palette-modal-header">
+        <span class="palette-modal-title">配色卡预览</span>
+        <button class="palette-modal-close" id="paletteModalClose">&times;</button>
+      </div>
+      <div class="palette-modal-preview">
+        <canvas id="palettePreviewCanvas"></canvas>
+      </div>
+      <div class="palette-modal-actions">
+        <button class="palette-modal-btn secondary" id="paletteModalCancel">关闭</button>
+        <button class="palette-modal-btn primary" id="paletteModalDownload">
+          <i class="fas fa-download"></i> 下载配色卡
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modalOverlay);
+
+  const previewCanvas = document.getElementById('palettePreviewCanvas');
+  previewCanvas.width = canvas.width;
+  previewCanvas.height = canvas.height;
+  previewCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) document.body.removeChild(modalOverlay);
+  });
+  document.getElementById('paletteModalClose').addEventListener('click', () => document.body.removeChild(modalOverlay));
+  document.getElementById('paletteModalCancel').addEventListener('click', () => document.body.removeChild(modalOverlay));
+  document.getElementById('paletteModalDownload').addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chromasense-palette-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  });
+});
 
 /* 重新上传按钮 */
 document.getElementById('reuploadBtn').addEventListener('click', () => {

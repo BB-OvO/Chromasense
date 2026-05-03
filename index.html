@@ -1345,46 +1345,40 @@ function copyText(text) {
    ======================================== */
 class MedianCut {
   constructor(pixels, maxColors) { this.pixels = pixels; this.maxColors = maxColors; }
-  /**
-   * 执行色彩量化，返回提取的颜色数组
-   * @returns {Array} 每个元素为 [r, g, b, pixelCount]
-   */
   quantize() {
     if (this.pixels.length === 0) return [];
     let boxes = [this.pixels.slice()];
     while (boxes.length < this.maxColors) {
-      let bestIdx = -1, bestRange = 0;
+      let bestIdx = -1, bestRange = 0, bestChannel = 0;
       for (let i = 0; i < boxes.length; i++) {
         if (boxes[i].length < 2) continue;
-        const r = this._boxRange(boxes[i]);
-        if (r.maxVal > bestRange) { bestRange = r.maxVal; bestIdx = i; }
+        const range = this._boxRange(boxes[i]);
+        if (range.maxVal > bestRange) { bestRange = range.maxVal; bestIdx = i; bestChannel = range.channel; }
       }
       if (bestIdx === -1 || bestRange <= 0) break;
-      const box = boxes[bestIdx], range = this._boxRange(box), ch = range.channel;
-      box.sort((a, b) => a[ch] - b[ch]);
+      const box = boxes[bestIdx];
+      box.sort((a, b) => a[bestChannel] - b[bestChannel]);
       const mid = Math.floor(box.length / 2);
       boxes.splice(bestIdx, 1, box.slice(0, mid), box.slice(mid));
     }
     return boxes.map(box => this._average(box));
   }
-  /**
-   * 计算颜色盒子的范围（各通道的最大值和最小值）
-   * @returns {Object} {channel: 最大差异的通道索引, maxVal: 最大差异值}
-   */
   _boxRange(box) {
-    let min = [255,255,255], max = [0,0,0];
-    for (const p of box) for (let c = 0; c < 3; c++) { if (p[c] < min[c]) min[c] = p[c]; if (p[c] > max[c]) max[c] = p[c]; }
-    const ranges = [max[0]-min[0], max[1]-min[1], max[2]-min[2]];
-    return { channel: ranges.indexOf(Math.max(...ranges)), maxVal: Math.max(...ranges) };
+    let min0=255, min1=255, min2=255, max0=0, max1=0, max2=0;
+    for (let i = 0; i < box.length; i++) {
+      const p = box[i];
+      if (p[0] < min0) min0 = p[0]; if (p[0] > max0) max0 = p[0];
+      if (p[1] < min1) min1 = p[1]; if (p[1] > max1) max1 = p[1];
+      if (p[2] < min2) min2 = p[2]; if (p[2] > max2) max2 = p[2];
+    }
+    const r0 = max0 - min0, r1 = max1 - min1, r2 = max2 - min2;
+    const maxVal = r0 > r1 ? (r0 > r2 ? r0 : r2) : (r1 > r2 ? r1 : r2);
+    const channel = maxVal === r0 ? 0 : (maxVal === r1 ? 1 : 2);
+    return { channel, maxVal };
   }
-  /**
-   * 计算颜色盒子的平均颜色
-   * @returns {Array} [avgR, avgG, avgB, pixelCount]
-   */
   _average(box) {
-    let r=0, g=0, b=0;
-    for (const p of box) { r+=p[0]; g+=p[1]; b+=p[2]; }
-    const n = box.length;
+    let r=0, g=0, b=0, n = box.length;
+    for (let i = 0; i < n; i++) { r+=box[i][0]; g+=box[i][1]; b+=box[i][2]; }
     return [Math.round(r/n), Math.round(g/n), Math.round(b/n), n];
   }
 }
@@ -1430,10 +1424,18 @@ function samplePixels(img) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
+  const totalPixels = w * h;
   const pixels = [];
-  for (let i = 0; i < data.length; i += 4) { if (data[i+3] < 128) continue; pixels.push([data[i], data[i+1], data[i+2]]); }
+  pixels.length = totalPixels;
+  let count = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i+3] >= 128) {
+      pixels[count++] = [data[i], data[i+1], data[i+2]];
+    }
+  }
+  pixels.length = count;
   state.originalPixels = pixels;
-  state.totalSampled = pixels.length;
+  state.totalSampled = count;
 }
 
 /**
@@ -1445,16 +1447,19 @@ function extractAndRender() {
   const mc = new MedianCut(state.originalPixels, count);
   const raw = mc.quantize();
   const totalPixels = raw.reduce((s, c) => s + c[3], 0);
-  state.colors = raw.map(([r, g, b, cnt]) => {
-    const hex = rgbToHex(r, g, b), hsl = rgbToHsl(r, g, b);
-    return {
+  state.colors = new Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    const [r, g, b, cnt] = raw[i];
+    const hex = rgbToHex(r, g, b);
+    const hsl = rgbToHsl(r, g, b);
+    state.colors[i] = {
       r, g, b, hex, hsl, count: cnt,
       percentage: Math.round(cnt / totalPixels * 1000) / 10,
       name: getColorName(hsl[0], hsl[1], hsl[2]),
       lum: getLuminance(r, g, b),
       vibrancy: vibrancy(hsl[0], hsl[1], hsl[2]),
     };
-  });
+  }
   sortAndRender();
   renderOriginalImage();
   renderSimplifiedImage();
@@ -1468,12 +1473,10 @@ function extractAndRender() {
  */
 function sortAndRender() {
   const mode = document.getElementById('sortSelect').value;
-  const sorted = [...state.colors];
-  switch (mode) {
-    case 'pct': sorted.sort((a, b) => b.percentage - a.percentage); break;
-    case 'hue': sorted.sort((a, b) => a.hsl[0] - b.hsl[0]); break;
-    case 'lum': sorted.sort((a, b) => b.lum - a.lum); break;
-  }
+  const sorted = state.colors.slice();
+  if (mode === 'pct') sorted.sort((a, b) => b.percentage - a.percentage);
+  else if (mode === 'hue') sorted.sort((a, b) => a.hsl[0] - b.hsl[0]);
+  else sorted.sort((a, b) => b.lum - a.lum);
   state.colors = sorted;
   renderStrip();
   renderColorList();
@@ -1491,8 +1494,8 @@ function renderOriginalImage() {
   if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
   canvas.width = w; canvas.height = h;
   canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-  document.getElementById('imageMeta').innerHTML =
-    `<span>${img.naturalWidth} × ${img.naturalHeight} px</span><span>采样 ${state.totalSampled.toLocaleString()} 像素</span><span>提取 ${state.colors.length} 色</span>`;
+  const meta = document.getElementById('imageMeta');
+  meta.innerHTML = `<span>${img.naturalWidth} × ${img.naturalHeight} px</span><span>采样 ${state.totalSampled.toLocaleString()} 像素</span><span>提取 ${state.colors.length} 色</span>`;
 }
 
 /**
@@ -1512,14 +1515,26 @@ function renderSimplifiedImage() {
   const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
   const colors = state.colors;
+  const colorCount = colors.length;
+  const colorCache = new Map();
+  const cacheLimit = 65536;
   for (let i = 0; i < data.length; i += 4) {
     if (data[i+3] < 128) continue;
     const pr = data[i], pg = data[i+1], pb = data[i+2];
-    let minDist = Infinity, best = colors[0];
-    for (const c of colors) {
-      const dr = pr-c.r, dg = pg-c.g, db = pb-c.b;
-      const dist = dr*dr + dg*dg + db*db;
-      if (dist < minDist) { minDist = dist; best = c; }
+    const key = (pr << 16) | (pg << 8) | pb;
+    let best;
+    if (colorCache.has(key)) {
+      best = colorCache.get(key);
+    } else {
+      let minDist = Infinity;
+      best = colors[0];
+      for (let j = 0; j < colorCount; j++) {
+        const c = colors[j];
+        const dr = pr - c.r, dg = pg - c.g, db = pb - c.b;
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < minDist) { minDist = dist; best = c; }
+      }
+      if (colorCache.size < cacheLimit) colorCache.set(key, best);
     }
     data[i] = best.r; data[i+1] = best.g; data[i+2] = best.b;
   }
@@ -1532,15 +1547,17 @@ function renderSimplifiedImage() {
  */
 function renderStrip() {
   const strip = document.getElementById('colorStrip');
-  strip.innerHTML = '';
+  const frag = document.createDocumentFragment();
   state.colors.forEach(c => {
     const div = document.createElement('div');
     div.style.flex = c.percentage;
     div.style.background = c.hex;
     div.title = `${c.hex} (${c.percentage}%)`;
     div.addEventListener('click', () => copyText(c.hex));
-    strip.appendChild(div);
+    frag.appendChild(div);
   });
+  strip.innerHTML = '';
+  strip.appendChild(frag);
 }
 
 /**
@@ -1550,7 +1567,7 @@ function renderStrip() {
  */
 function renderColorList() {
   const list = document.getElementById('colorList');
-  list.innerHTML = '';
+  const frag = document.createDocumentFragment();
   state.colors.forEach((c, i) => {
     const card = document.createElement('div');
     card.className = 'color-card color-card-enter';
@@ -1567,8 +1584,10 @@ function renderColorList() {
         <span class="color-pct-num">${c.percentage}%</span>
       </div>`;
     card.addEventListener('click', () => copyText(c.hex.toUpperCase()));
-    list.appendChild(card);
+    frag.appendChild(card);
   });
+  list.innerHTML = '';
+  list.appendChild(frag);
 }
 
 /* === 精致配色预览 === */
@@ -1581,23 +1600,17 @@ function renderPreview() {
   const colors = state.colors;
   if (colors.length < 3) return;
 
-  // 按不同维度排序备用
-  const byLum = [...colors].sort((a, b) => a.lum - b.lum);
-  const byVib = [...colors].sort((a, b) => b.vibrancy - a.vibrancy);
-  const byPct = [...colors].sort((a, b) => b.percentage - a.percentage);
+  const byLum = colors.slice().sort((a, b) => a.lum - b.lum);
+  const byVib = colors.slice().sort((a, b) => b.vibrancy - a.vibrancy);
+  const byPct = colors.slice().sort((a, b) => b.percentage - a.percentage);
 
   const darkest = byLum[0];
   const lightest = byLum[byLum.length - 1];
   const accent = byVib[0];
   const accent2 = byVib.length > 1 ? byVib[1] : accent;
-
-  // 次暗色（用于分隔区域）
   const nearDark = byLum.length > 1 ? byLum[1] : darkest;
+  const midColors = colors.slice().sort((a, b) => Math.abs(a.lum - 0.5) - Math.abs(b.lum - 0.5));
 
-  // 中间明度的几个颜色
-  const midColors = [...colors].sort((a, b) => Math.abs(a.lum - 0.5) - Math.abs(b.lum - 0.5));
-
-  // Hero 区：用占比最高的两色做渐变
   const heroBg = byPct[0];
   const heroBg2 = byPct.length > 1 ? byPct[1] : byPct[0];
   const heroText = contrastColor(
@@ -1608,11 +1621,9 @@ function renderPreview() {
   const accentText = contrastColor(accent.r, accent.g, accent.b);
   const navText = contrastColor(darkest.r, darkest.g, darkest.b);
 
-  // 找两个不同色调的中间色做特性图标背景
   const featureIcons = midColors.slice(0, 3);
   while (featureIcons.length < 3) featureIcons.push(colors[featureIcons.length % colors.length]);
 
-  // 特性卡片背景和文字
   const featureCardBg = lightest.lum > 0.85 ? '#f8f8f8' : lightest.hex;
   const featureText = contrastColor(
     ...(() => { const c = featureCardBg.startsWith('#') ? (() => {
@@ -1621,19 +1632,15 @@ function renderPreview() {
     })() : [245,245,245]; return c; })()
   );
 
-  // 特性卡片的三个颜色
   const featColors = colors.filter(c => c.lum > 0.12 && c.lum < 0.88).slice(0, 3);
   while (featColors.length < 3) featColors.push(colors[featColors.length % colors.length]);
 
-  // 指标区背景
   const metricsBg = nearDark.hex;
   const metricsText = contrastColor(nearDark.r, nearDark.g, nearDark.b);
 
-  // CTA 区
   const ctaBg = accent.hex;
   const ctaText = accentText;
 
-  // 图片用原图缩略图
   const imgSrc = state.image.src;
 
   const frame = document.getElementById('previewFrame');
@@ -1725,10 +1732,12 @@ function renderPreview() {
 function renderExport() {
   const code = document.getElementById('exportCode');
   let css = ':root {\n';
-  state.colors.forEach((c, i) => {
+  const colors = state.colors;
+  for (let i = 0; i < colors.length; i++) {
+    const c = colors[i];
     const label = c.name.replace('色', '');
     css += `  --color-${i + 1}: ${c.hex.toUpperCase()}; /* ${label} ${c.percentage}% */\n`;
-  });
+  }
   css += '}';
   code.textContent = css;
 }
@@ -1810,7 +1819,14 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
   function drawPaletteCard() {
     const dpr = isMobile ? 1 : 2;
     const width = isMobile ? 480 : 800;
-    const height = isMobile ? 400 : 500;
+    const colors = state.colors;
+    const cols = isMobile ? Math.min(colors.length, 3) : Math.min(colors.length, 5);
+    const rows = Math.ceil(colors.length / cols);
+    const cardHeight = isMobile ? 75 : 100;
+    const stripHeight = isMobile ? 50 : 80;
+    const headerHeight = isMobile ? 50 : 65;
+    const padding = isMobile ? 30 : 50;
+    const height = isMobile ? (headerHeight + stripHeight + rows * cardHeight + padding) : 500;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = width * dpr;
@@ -1821,24 +1837,20 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     ctx.fillRect(0, 0, width, height);
 
     ctx.fillStyle = '#4f6479';
-    ctx.font = `bold ${isMobile ? 20 : 28}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 40 : 55);
+    ctx.font = `bold ${isMobile ? 22 : 28}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 38 : 55);
 
-    const stripHeight = isMobile ? 55 : 80;
-    const stripY = isMobile ? 60 : 90;
+    const stripY = headerHeight - 10;
     const stripWidth = width - (isMobile ? 40 : 80);
-    const colorWidth = stripWidth / state.colors.length;
+    const colorWidth = stripWidth / colors.length;
 
-    state.colors.forEach((color, index) => {
+    colors.forEach((color, index) => {
       ctx.fillStyle = color.hex;
       ctx.fillRect((isMobile ? 20 : 40) + index * colorWidth, stripY, colorWidth, stripHeight);
     });
 
-    const colors = state.colors;
-    const cols = isMobile ? Math.min(colors.length, 4) : Math.min(colors.length, 5);
     const cardWidth = (width - (isMobile ? 40 : 80)) / cols;
-    const cardHeight = isMobile ? 80 : 100;
-    const startY = stripY + stripHeight + (isMobile ? 30 : 50);
+    const startY = stripY + stripHeight + (isMobile ? 20 : 50);
 
     colors.forEach((color, index) => {
       const col = index % cols;
@@ -1851,16 +1863,16 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
       ctx.fillRect(x, y, swatchSize, swatchSize);
 
       ctx.fillStyle = '#4f6479';
-      ctx.font = `bold ${isMobile ? 12 : 14}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-      ctx.fillText(color.hex.toUpperCase(), x + swatchSize + 8, y + (isMobile ? 16 : 22));
+      ctx.font = `bold ${isMobile ? 14 : 14}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(color.hex.toUpperCase(), x + swatchSize + 8, y + (isMobile ? 18 : 22));
 
       ctx.fillStyle = '#614226';
-      ctx.font = `${isMobile ? 11 : 12}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-      ctx.fillText(color.name, x + swatchSize + 8, y + (isMobile ? 32 : 42));
+      ctx.font = `${isMobile ? 13 : 12}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(color.name, x + swatchSize + 8, y + (isMobile ? 36 : 42));
 
       ctx.fillStyle = '#a3b4c4';
-      ctx.font = `${isMobile ? 10 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-      ctx.fillText(`占比 ${color.percentage}%`, x + swatchSize + 8, y + (isMobile ? 46 : 60));
+      ctx.font = `${isMobile ? 12 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(`占比 ${color.percentage}%`, x + swatchSize + 8, y + (isMobile ? 52 : 60));
     });
 
     return canvas.toDataURL('image/png');

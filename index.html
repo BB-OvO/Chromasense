@@ -1861,17 +1861,20 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     ctx.fillText(`占比 ${color.percentage}%`, x + swatchSize + 8, y + (isMobile ? 46 : 60));
   });
 
+  const dataUrl = canvas.toDataURL('image/png');
+
   const modalOverlay = document.createElement('div');
   modalOverlay.className = 'palette-modal-overlay';
-  modalOverlay.style.animation = 'none';
-  modalOverlay.innerHTML = `
-    <div class="palette-modal" style="animation:none">
+  if (isMobile) modalOverlay.style.background = 'rgba(0,0,0,0.7)';
+  
+  const modalContent = `
+    <div class="palette-modal">
       <div class="palette-modal-header">
         <span class="palette-modal-title">配色卡预览</span>
         <button class="palette-modal-close" id="paletteModalClose">&times;</button>
       </div>
       <div class="palette-modal-preview">
-        <canvas id="palettePreviewCanvas"></canvas>
+        <img src="${dataUrl}" alt="配色卡" style="width:100%;height:auto;border-radius:8px;">
       </div>
       <div class="palette-modal-actions">
         <button class="palette-modal-btn secondary" id="paletteModalCancel">关闭</button>
@@ -1881,36 +1884,31 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
       </div>
     </div>
   `;
+  
+  modalOverlay.innerHTML = modalContent;
   document.body.appendChild(modalOverlay);
 
-  requestAnimationFrame(() => {
-    const previewCanvas = document.getElementById('palettePreviewCanvas');
-    previewCanvas.width = canvas.width;
-    previewCanvas.height = canvas.height;
-    previewCanvas.getContext('2d').drawImage(canvas, 0, 0);
-  });
-
   const closeModal = () => {
-    if (document.body.contains(modalOverlay)) {
-      document.body.removeChild(modalOverlay);
-    }
+    try {
+      if (modalOverlay && modalOverlay.parentNode) {
+        modalOverlay.parentNode.removeChild(modalOverlay);
+      }
+    } catch (e) {}
   };
 
-  modalOverlay.addEventListener('click', (e) => {
+  modalOverlay.onclick = (e) => {
     if (e.target === modalOverlay) closeModal();
-  });
-  document.getElementById('paletteModalClose').addEventListener('click', closeModal);
-  document.getElementById('paletteModalCancel').addEventListener('click', closeModal);
-  document.getElementById('paletteModalDownload').addEventListener('click', () => {
-    canvas.toBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `chromasense-palette-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }, 'image/png');
-  });
+  };
+  
+  document.getElementById('paletteModalClose').onclick = closeModal;
+  document.getElementById('paletteModalCancel').onclick = closeModal;
+  
+  document.getElementById('paletteModalDownload').onclick = () => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `chromasense-palette-${Date.now()}.png`;
+    a.click();
+  };
 });
 
 /* 重新上传按钮 */

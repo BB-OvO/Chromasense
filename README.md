@@ -1,5 +1,11 @@
 <div align="center">
-  <h1>🎨 Chromasense</h1>
+  <h1>
+    <img src="logo.svg" 
+         width="36" 
+         alt="Chromasense logo" 
+         style="vertical-align: middle; margin-right: 8px;" />
+    Chromasense
+  </h1>
   <p><strong>图片色彩提取与配色参考工具</strong></p>
   <p>
     <a href="https://chromasense-3pp.pages.dev/">🔗 在线体验</a>

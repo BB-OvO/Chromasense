@@ -1806,109 +1806,201 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
   }
 
   const isMobile = window.innerWidth <= 600;
-  const dpr = isMobile ? 1 : 2;
-  const width = isMobile ? 480 : 800;
-  const height = isMobile ? 400 : 500;
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
-  ctx.scale(dpr, dpr);
 
-  ctx.fillStyle = '#f8f9fa';
-  ctx.fillRect(0, 0, width, height);
+  function drawPaletteCard() {
+    const dpr = isMobile ? 1 : 2;
+    const width = isMobile ? 480 : 800;
+    const height = isMobile ? 400 : 500;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
 
-  ctx.fillStyle = '#4f6479';
-  ctx.font = `bold ${isMobile ? 20 : 28}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-  ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 40 : 55);
-
-  const stripHeight = isMobile ? 55 : 80;
-  const stripY = isMobile ? 60 : 90;
-  const stripWidth = width - (isMobile ? 40 : 80);
-  const colorWidth = stripWidth / state.colors.length;
-
-  state.colors.forEach((color, index) => {
-    ctx.fillStyle = color.hex;
-    ctx.fillRect((isMobile ? 20 : 40) + index * colorWidth, stripY, colorWidth, stripHeight);
-  });
-
-  const colors = state.colors;
-  const cols = isMobile ? Math.min(colors.length, 4) : Math.min(colors.length, 5);
-  const cardWidth = (width - (isMobile ? 40 : 80)) / cols;
-  const cardHeight = isMobile ? 80 : 100;
-  const startY = stripY + stripHeight + (isMobile ? 30 : 50);
-
-  colors.forEach((color, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = (isMobile ? 20 : 40) + col * cardWidth;
-    const y = startY + row * cardHeight;
-    const swatchSize = isMobile ? 36 : 50;
-
-    ctx.fillStyle = color.hex;
-    ctx.fillRect(x, y, swatchSize, swatchSize);
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, width, height);
 
     ctx.fillStyle = '#4f6479';
-    ctx.font = `bold ${isMobile ? 12 : 14}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.fillText(color.hex.toUpperCase(), x + swatchSize + 8, y + (isMobile ? 16 : 22));
+    ctx.font = `bold ${isMobile ? 20 : 28}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 40 : 55);
 
-    ctx.fillStyle = '#614226';
-    ctx.font = `${isMobile ? 11 : 12}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.fillText(color.name, x + swatchSize + 8, y + (isMobile ? 32 : 42));
+    const stripHeight = isMobile ? 55 : 80;
+    const stripY = isMobile ? 60 : 90;
+    const stripWidth = width - (isMobile ? 40 : 80);
+    const colorWidth = stripWidth / state.colors.length;
 
-    ctx.fillStyle = '#a3b4c4';
-    ctx.font = `${isMobile ? 10 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.fillText(`占比 ${color.percentage}%`, x + swatchSize + 8, y + (isMobile ? 46 : 60));
-  });
+    state.colors.forEach((color, index) => {
+      ctx.fillStyle = color.hex;
+      ctx.fillRect((isMobile ? 20 : 40) + index * colorWidth, stripY, colorWidth, stripHeight);
+    });
 
-  const dataUrl = canvas.toDataURL('image/png');
+    const colors = state.colors;
+    const cols = isMobile ? Math.min(colors.length, 4) : Math.min(colors.length, 5);
+    const cardWidth = (width - (isMobile ? 40 : 80)) / cols;
+    const cardHeight = isMobile ? 80 : 100;
+    const startY = stripY + stripHeight + (isMobile ? 30 : 50);
 
-  const modalOverlay = document.createElement('div');
-  modalOverlay.className = 'palette-modal-overlay';
-  if (isMobile) modalOverlay.style.background = 'rgba(0,0,0,0.7)';
-  
-  const modalContent = `
-    <div class="palette-modal">
-      <div class="palette-modal-header">
-        <span class="palette-modal-title">配色卡预览</span>
-        <button class="palette-modal-close" id="paletteModalClose">&times;</button>
-      </div>
-      <div class="palette-modal-preview">
-        <img src="${dataUrl}" alt="配色卡" style="width:100%;height:auto;border-radius:8px;">
-      </div>
-      <div class="palette-modal-actions">
-        <button class="palette-modal-btn secondary" id="paletteModalCancel">关闭</button>
-        <button class="palette-modal-btn primary" id="paletteModalDownload">
-          <i class="fas fa-download"></i> 下载配色卡
-        </button>
-      </div>
-    </div>
-  `;
-  
-  modalOverlay.innerHTML = modalContent;
-  document.body.appendChild(modalOverlay);
+    colors.forEach((color, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const x = (isMobile ? 20 : 40) + col * cardWidth;
+      const y = startY + row * cardHeight;
+      const swatchSize = isMobile ? 36 : 50;
 
-  const closeModal = () => {
-    try {
-      if (modalOverlay && modalOverlay.parentNode) {
-        modalOverlay.parentNode.removeChild(modalOverlay);
+      ctx.fillStyle = color.hex;
+      ctx.fillRect(x, y, swatchSize, swatchSize);
+
+      ctx.fillStyle = '#4f6479';
+      ctx.font = `bold ${isMobile ? 12 : 14}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(color.hex.toUpperCase(), x + swatchSize + 8, y + (isMobile ? 16 : 22));
+
+      ctx.fillStyle = '#614226';
+      ctx.font = `${isMobile ? 11 : 12}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(color.name, x + swatchSize + 8, y + (isMobile ? 32 : 42));
+
+      ctx.fillStyle = '#a3b4c4';
+      ctx.font = `${isMobile ? 10 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(`占比 ${color.percentage}%`, x + swatchSize + 8, y + (isMobile ? 46 : 60));
+    });
+
+    return canvas.toDataURL('image/png');
+  }
+
+  if (isMobile) {
+    const overlay = document.createElement('div');
+    overlay.id = 'mobilePaletteOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#fff;border-radius:12px;padding:16px;width:100%;max-width:360px;box-sizing:border-box;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;';
+    const title = document.createElement('span');
+    title.textContent = '配色卡预览';
+    title.style.cssText = 'font-weight:700;font-size:16px;color:#614226;';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.style.cssText = 'width:32px;height:32px;border-radius:50%;border:none;background:#f0f0f0;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    const previewBox = document.createElement('div');
+    previewBox.style.cssText = 'background:#f8f9fa;border-radius:8px;padding:8px;margin-bottom:12px;min-height:150px;display:flex;align-items:center;justify-content:center;';
+    const loadingText = document.createElement('span');
+    loadingText.textContent = '生成中...';
+    loadingText.style.cssText = 'color:#888;font-size:14px;';
+    previewBox.appendChild(loadingText);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '关闭';
+    cancelBtn.style.cssText = 'flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:14px;';
+    const downloadBtn = document.createElement('button');
+    downloadBtn.textContent = '下载配色卡';
+    downloadBtn.style.cssText = 'flex:1;padding:10px;border:none;border-radius:6px;background:#614226;color:#fff;cursor:pointer;font-size:14px;';
+    actions.appendChild(cancelBtn);
+    actions.appendChild(downloadBtn);
+
+    modal.appendChild(header);
+    modal.appendChild(previewBox);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    let dataUrl = null;
+
+    const closeModal = () => {
+      const el = document.getElementById('mobilePaletteOverlay');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (dataUrl) {
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `chromasense-palette-${Date.now()}.png`;
+        a.click();
       }
-    } catch (e) {}
-  };
+    });
 
-  modalOverlay.onclick = (e) => {
-    if (e.target === modalOverlay) closeModal();
-  };
-  
-  document.getElementById('paletteModalClose').onclick = closeModal;
-  document.getElementById('paletteModalCancel').onclick = closeModal;
-  
-  document.getElementById('paletteModalDownload').onclick = () => {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `chromasense-palette-${Date.now()}.png`;
-    a.click();
-  };
+    setTimeout(() => {
+      try {
+        dataUrl = drawPaletteCard();
+        previewBox.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = '配色卡';
+        img.style.cssText = 'width:100%;height:auto;border-radius:4px;display:block;';
+        previewBox.appendChild(img);
+      } catch (err) {
+        previewBox.innerHTML = '<span style="color:#c00;font-size:14px;">生成失败，请重试</span>';
+      }
+    }, 50);
+  } else {
+    const modalOverlay = document.createElement('div');
+    modalOverlay.className = 'palette-modal-overlay';
+    
+    const modalContent = `
+      <div class="palette-modal">
+        <div class="palette-modal-header">
+          <span class="palette-modal-title">配色卡预览</span>
+          <button class="palette-modal-close" id="paletteModalClose">&times;</button>
+        </div>
+        <div class="palette-modal-preview">
+          <img id="palettePreviewImg" alt="配色卡" style="width:100%;height:auto;border-radius:8px;">
+        </div>
+        <div class="palette-modal-actions">
+          <button class="palette-modal-btn secondary" id="paletteModalCancel">关闭</button>
+          <button class="palette-modal-btn primary" id="paletteModalDownload">
+            <i class="fas fa-download"></i> 下载配色卡
+          </button>
+        </div>
+      </div>
+    `;
+    
+    modalOverlay.innerHTML = modalContent;
+    document.body.appendChild(modalOverlay);
+
+    const closeModal = () => {
+      try {
+        if (modalOverlay && modalOverlay.parentNode) {
+          modalOverlay.parentNode.removeChild(modalOverlay);
+        }
+      } catch (e) {}
+    };
+
+    modalOverlay.onclick = (e) => {
+      if (e.target === modalOverlay) closeModal();
+    };
+    
+    document.getElementById('paletteModalClose').onclick = closeModal;
+    document.getElementById('paletteModalCancel').onclick = closeModal;
+
+    let dataUrl = null;
+    
+    setTimeout(() => {
+      dataUrl = drawPaletteCard();
+      const img = document.getElementById('palettePreviewImg');
+      if (img) img.src = dataUrl;
+    }, 10);
+    
+    document.getElementById('paletteModalDownload').onclick = () => {
+      if (dataUrl) {
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `chromasense-palette-${Date.now()}.png`;
+        a.click();
+      }
+    };
+  }
 });
 
 /* 重新上传按钮 */

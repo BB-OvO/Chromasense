@@ -1,6 +1,6 @@
 <div align="center">
   <h1>
-    <img src="logo.svg" 
+    <img src="https://raw.githubusercontent.com/BB-OvO/Chromasense/main/logo.svg" 
          width="36" 
          alt="Chromasense logo" 
          style="vertical-align: middle; margin-right: 8px;" />

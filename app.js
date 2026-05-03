@@ -645,7 +645,7 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     const rows = Math.ceil(colors.length / cols);
     const cardHeight = isMobile ? 75 : 100;
     const stripHeight = isMobile ? 50 : 80;
-    const headerHeight = isMobile ? 50 : 65;
+    const headerHeight = isMobile ? 70 : 65;
     const padding = isMobile ? 30 : 50;
     const height = isMobile ? (headerHeight + stripHeight + rows * cardHeight + padding) : 500;
     const canvas = document.createElement('canvas');
@@ -659,9 +659,9 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
 
     ctx.fillStyle = '#4f6479';
     ctx.font = `bold ${isMobile ? 22 : 28}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 38 : 55);
+    ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 45 : 55);
 
-    const stripY = headerHeight - 10;
+    const stripY = headerHeight;
     const stripWidth = width - (isMobile ? 40 : 80);
     const colorWidth = stripWidth / colors.length;
 

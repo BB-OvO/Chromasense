@@ -5,7 +5,8 @@
     <a href="https://chromasense-3pp.pages.dev/">🔗 在线体验</a>
   </p>
 </div>
-<img width="1915" height="760" alt="image" src="https://github.com/user-attachments/assets/f704f027-86c5-4e24-aab4-0e425936ef9a" />
+<img width="1380" height="686" alt="image" src="https://github.com/user-attachments/assets/3f8bc057-2b53-4c6c-b0b9-d40643594994" />
+
 
 <!-- 在这里放置 Hero 截图 -->
 <!-- ![Chromasense 主界面](assets/hero.png) -->
@@ -19,8 +20,10 @@
 *   **CSS 变量导出** — 一键复制 `:root` 变量，附色名与占比注释，直接可用
 *   **多种输入方式** — 拖拽上传、点击选择、`Ctrl+V` 粘贴剪贴板图片
 *   **纯前端运行** — 所有计算在浏览器本地完成，不上传任何数据
-<img width="1914" height="969" alt="image" src="https://github.com/user-attachments/assets/28a65f3c-bcee-4ac9-af6c-3d7a1e0215ff" />
-<img width="1905" height="563" alt="image" src="https://github.com/user-attachments/assets/295ea1be-4394-41bb-afb1-07ab6bd822fc" />
+<img width="1357" height="902" alt="image" src="https://github.com/user-attachments/assets/03ea315c-0bf5-4b76-b0ff-623b735ee4ec" />
+
+<img width="1310" height="510" alt="image" src="https://github.com/user-attachments/assets/29e8bc15-5fc4-402e-9f93-c749771e9cf6" />
+
 
 ## 🚀 快速开始
 

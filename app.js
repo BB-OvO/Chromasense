@@ -861,7 +861,10 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     const stripHeight = isMobile ? 50 : 80;
     const headerHeight = isMobile ? 70 : 65;
     const padding = isMobile ? 30 : 50;
-    const height = isMobile ? (headerHeight + stripHeight + rows * cardHeight + padding) : 500;
+    const footerSpace = isMobile ? 20 : 40;
+    const height = isMobile 
+      ? (headerHeight + stripHeight + rows * cardHeight + padding) 
+      : (headerHeight + stripHeight + rows * cardHeight + padding + footerSpace);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = width * dpr;
@@ -945,7 +948,7 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     header.appendChild(closeBtn);
 
     const previewBox = document.createElement('div');
-    previewBox.style.cssText = 'background:#f8f9fa;border-radius:8px;padding:8px;margin-bottom:12px;min-height:150px;display:flex;align-items:center;justify-content:center;';
+    previewBox.style.cssText = 'background:#f8f9fa;border-radius:8px;padding:8px;margin-bottom:12px;min-height:150px;max-height:70vh;overflow-y:auto;display:flex;align-items:center;justify-content:center;';
     const loadingText = document.createElement('span');
     loadingText.textContent = '生成中...';
     loadingText.style.cssText = 'color:#888;font-size:14px;';
@@ -1017,7 +1020,7 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
           <span class="palette-modal-title">配色卡预览</span>
           <button class="palette-modal-close" id="paletteModalClose">&times;</button>
         </div>
-        <div class="palette-modal-preview">
+        <div class="palette-modal-preview" style="max-height:70vh;overflow-y:auto;">
           <img id="palettePreviewImg" alt="配色卡" style="width:100%;height:auto;border-radius:8px;">
         </div>
         <div class="palette-modal-actions">

@@ -106,8 +106,9 @@ function getColorName(h, s, l) {
 function vibrancy(h, s, l) { return s * (1 - Math.abs(l - 50) / 50); }
 
 /**
- * 显示 Toast 通知提示
- * @param {string} msg - 提示消息内容
+ * HTML 转义，防止 XSS 攻击
+ * @param {string} str - 需要转义的字符串
+ * @returns {string} 转义后的字符串
  */
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -115,6 +116,10 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * 显示 Toast 通知提示
+ * @param {string} msg - 提示消息内容
+ */
 function showToast(msg) {
   const c = document.getElementById('toastContainer');
   if (!c) return;
@@ -133,47 +138,187 @@ function copyText(text) {
 }
 
 /* ========================================
-   Median Cut 色彩量化算法
-   用于从大量像素中提取最具代表性的 N 种颜色
-   算法原理：递归地将颜色空间沿最长轴中点分割
+   色彩空间转换 - RGB <-> Lab
+   Lab 是感知均匀的色彩空间，更接近人眼感知
+   ======================================== */
+function rgbToXyz(r, g, b) {
+  r = r / 255; g = g / 255; b = b / 255;
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+  r *= 100; g *= 100; b *= 100;
+  return [
+    r * 0.4124564 + g * 0.3575761 + b * 0.1804375,
+    r * 0.2126729 + g * 0.7151522 + b * 0.0721750,
+    r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+  ];
+}
+function xyzToLab(x, y, z) {
+  const D65 = [95.047, 100.0, 108.883];
+  const f = t => t > 0.008856 ? Math.pow(t, 1/3) : (7.787 * t) + 16/116;
+  const fx = f(x / D65[0]), fy = f(y / D65[1]), fz = f(z / D65[2]);
+  return [(116 * fy) - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function rgbToLab(r, g, b) {
+  const [x, y, z] = rgbToXyz(r, g, b);
+  return xyzToLab(x, y, z);
+}
+function labToXyz(l, a, b) {
+  const D65 = [95.047, 100.0, 108.883];
+  const fy = (l + 16) / 116;
+  const fx = a / 500 + fy;
+  const fz = fy - b / 200;
+  const f = t => {
+    const t3 = t * t * t;
+    return t3 > 0.008856 ? t3 : (t - 16/116) / 7.787;
+  };
+  return [D65[0] * f(fx), D65[1] * f(fy), D65[2] * f(fz)];
+}
+function xyzToRgb(x, y, z) {
+  x /= 100; y /= 100; z /= 100;
+  let r = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
+  let g = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
+  let b = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
+  const f = t => t > 0.0031308 ? 1.055 * Math.pow(t, 1/2.4) - 0.055 : 12.92 * t;
+  return [Math.round(Math.max(0, Math.min(255, f(r) * 255))),
+          Math.round(Math.max(0, Math.min(255, f(g) * 255))),
+          Math.round(Math.max(0, Math.min(255, f(b) * 255)))];
+}
+function labToRgb(l, a, b) {
+  const [x, y, z] = labToXyz(l, a, b);
+  return xyzToRgb(x, y, z);
+}
+function deltaE(lab1, lab2) {
+  const dL = lab1[0] - lab2[0];
+  const da = lab1[1] - lab2[1];
+  const db = lab1[2] - lab2[2];
+  return Math.sqrt(dL*dL + da*da + db*db);
+}
+
+/* ========================================
+   改进的 Median Cut 色彩量化算法
+   使用 Lab 感知色彩空间，更接近人眼感知
+   支持小面积色彩保留和颜色去重
    ======================================== */
 class MedianCut {
-  constructor(pixels, maxColors) { this.pixels = pixels; this.maxColors = maxColors; }
+  constructor(pixels, maxColors) {
+    this.pixels = pixels;
+    this.maxColors = maxColors;
+    this.labCache = new Map();
+  }
+  _getLab(pixel) {
+    const key = (pixel[0] << 16) | (pixel[1] << 8) | pixel[2];
+    if (!this.labCache.has(key)) {
+      this.labCache.set(key, rgbToLab(pixel[0], pixel[1], pixel[2]));
+    }
+    return this.labCache.get(key);
+  }
   quantize() {
     if (this.pixels.length === 0) return [];
-    let boxes = [this.pixels.slice()];
+    const boxes = [{ pixels: this.pixels.slice(), lab: this.pixels.map(p => this._getLab(p)) }];
     while (boxes.length < this.maxColors) {
-      let bestIdx = -1, bestRange = 0, bestChannel = 0;
+      let bestIdx = -1, bestVolume = -1;
       for (let i = 0; i < boxes.length; i++) {
-        if (boxes[i].length < 2) continue;
-        const range = this._boxRange(boxes[i]);
-        if (range.maxVal > bestRange) { bestRange = range.maxVal; bestIdx = i; bestChannel = range.channel; }
+        if (boxes[i].pixels.length < 2) continue;
+        const vol = this._volume(boxes[i].lab);
+        if (vol > bestVolume) { bestVolume = vol; bestIdx = i; }
       }
-      if (bestIdx === -1 || bestRange <= 0) break;
+      if (bestIdx === -1 || bestVolume <= 0) break;
       const box = boxes[bestIdx];
-      box.sort((a, b) => a[bestChannel] - b[bestChannel]);
-      const mid = Math.floor(box.length / 2);
-      boxes.splice(bestIdx, 1, box.slice(0, mid), box.slice(mid));
+      const splitInfo = this._findBestSplit(box);
+      const { left, right, leftLab, rightLab } = this._splitBox(box, splitInfo.channel, splitInfo.threshold);
+      boxes.splice(bestIdx, 1, { pixels: left, lab: leftLab }, { pixels: right, lab: rightLab });
     }
-    return boxes.map(box => this._average(box));
+    const results = boxes.map(box => this._weightedAverage(box));
+    return this._deduplicateColors(results);
   }
-  _boxRange(box) {
-    let min0=255, min1=255, min2=255, max0=0, max1=0, max2=0;
-    for (let i = 0; i < box.length; i++) {
-      const p = box[i];
-      if (p[0] < min0) min0 = p[0]; if (p[0] > max0) max0 = p[0];
-      if (p[1] < min1) min1 = p[1]; if (p[1] > max1) max1 = p[1];
-      if (p[2] < min2) min2 = p[2]; if (p[2] > max2) max2 = p[2];
+  _volume(labArr) {
+    let minL=100, maxL=0, minA=128, maxA=-128, minB=128, maxB=-128;
+    for (const lab of labArr) {
+      if (lab[0] < minL) minL = lab[0]; if (lab[0] > maxL) maxL = lab[0];
+      if (lab[1] < minA) minA = lab[1]; if (lab[1] > maxA) maxA = lab[1];
+      if (lab[2] < minB) minB = lab[2]; if (lab[2] > maxB) maxB = lab[2];
     }
-    const r0 = max0 - min0, r1 = max1 - min1, r2 = max2 - min2;
-    const maxVal = r0 > r1 ? (r0 > r2 ? r0 : r2) : (r1 > r2 ? r1 : r2);
-    const channel = maxVal === r0 ? 0 : (maxVal === r1 ? 1 : 2);
-    return { channel, maxVal };
+    return (maxL - minL) * 1.5 + (maxA - minA) + (maxB - minB);
   }
-  _average(box) {
-    let r=0, g=0, b=0, n = box.length;
-    for (let i = 0; i < n; i++) { r+=box[i][0]; g+=box[i][1]; b+=box[i][2]; }
-    return [Math.round(r/n), Math.round(g/n), Math.round(b/n), n];
+  _findBestSplit(box) {
+    const channels = [0, 1, 2];
+    let bestChannel = 0, bestThreshold = 0, bestSpread = -1;
+    for (const ch of channels) {
+      const values = box.lab.map(l => l[ch]).sort((a, b) => a - b);
+      const spread = values[values.length - 1] - values[0];
+      if (spread > bestSpread) {
+        bestSpread = spread;
+        bestChannel = ch;
+        const mid = Math.floor(values.length / 2);
+        bestThreshold = values[mid];
+      }
+    }
+    return { channel: bestChannel, threshold: bestThreshold };
+  }
+  _splitBox(box, channel, threshold) {
+    const left = [], right = [], leftLab = [], rightLab = [];
+    for (let i = 0; i < box.pixels.length; i++) {
+      if (box.lab[i][channel] <= threshold) {
+        left.push(box.pixels[i]);
+        leftLab.push(box.lab[i]);
+      } else {
+        right.push(box.pixels[i]);
+        rightLab.push(box.lab[i]);
+      }
+    }
+    if (left.length === 0 || right.length === 0) {
+      const mid = Math.floor(box.pixels.length / 2);
+      return {
+        left: box.pixels.slice(0, mid),
+        right: box.pixels.slice(mid),
+        leftLab: box.lab.slice(0, mid),
+        rightLab: box.lab.slice(mid)
+      };
+    }
+    return { left, right, leftLab, rightLab };
+  }
+  _weightedAverage(box) {
+    let sumL=0, sumA=0, sumB=0, sumWeight=0;
+    const weights = [];
+    for (let i = 0; i < box.pixels.length; i++) {
+      const lab = box.lab[i];
+      const chroma = Math.sqrt(lab[1]*lab[1] + lab[2]*lab[2]);
+      const weight = 1 + chroma * 0.02;
+      weights.push(weight);
+      sumL += lab[0] * weight;
+      sumA += lab[1] * weight;
+      sumB += lab[2] * weight;
+      sumWeight += weight;
+    }
+    const avgL = sumL / sumWeight, avgA = sumA / sumWeight, avgB = sumB / sumWeight;
+    const [r, g, b] = labToRgb(avgL, avgA, avgB);
+    return [r, g, b, box.pixels.length];
+  }
+  _deduplicateColors(colors) {
+    if (colors.length <= 1) return colors;
+    const threshold = 8;
+    const result = [];
+    const used = new Set();
+    for (let i = 0; i < colors.length; i++) {
+      if (used.has(i)) continue;
+      const lab1 = rgbToLab(colors[i][0], colors[i][1], colors[i][2]);
+      let merged = [colors[i]];
+      for (let j = i + 1; j < colors.length; j++) {
+        if (used.has(j)) continue;
+        const lab2 = rgbToLab(colors[j][0], colors[j][1], colors[j][2]);
+        if (deltaE(lab1, lab2) < threshold) {
+          merged.push(colors[j]);
+          used.add(j);
+        }
+      }
+      const total = merged.reduce((s, c) => s + c[3], 0);
+      const avgR = Math.round(merged.reduce((s, c) => s + c[0] * c[3], 0) / total);
+      const avgG = Math.round(merged.reduce((s, c) => s + c[1] * c[3], 0) / total);
+      const avgB = Math.round(merged.reduce((s, c) => s + c[2] * c[3], 0) / total);
+      result.push([avgR, avgG, avgB, total]);
+    }
+    return result.sort((a, b) => b[3] - a[3]);
   }
 }
 
@@ -224,13 +369,25 @@ function handleImage(file) {
   reader.readAsDataURL(file);
 }
 
+/**
+ * 智能像素采样
+ * 根据图片尺寸动态调整采样分辨率
+ * 使用网格采样 + 随机采样结合，保留小面积色彩
+ */
 function samplePixels(img) {
   let w = img.naturalWidth, h = img.naturalHeight;
-  const maxDim = Math.max(w, h) > 200 ? 150 : 100;
-  if (Math.max(w, h) > maxDim) { const s = maxDim / Math.max(w, h); w = Math.round(w*s); h = Math.round(h*s); }
+  const originalArea = w * h;
+  let targetSamples;
+  if (originalArea > 500000) targetSamples = 25000;
+  else if (originalArea > 200000) targetSamples = 15000;
+  else if (originalArea > 50000) targetSamples = 8000;
+  else targetSamples = Math.max(3000, Math.min(5000, originalArea));
+  const scale = Math.sqrt(targetSamples / originalArea);
+  const sampleW = Math.max(100, Math.min(300, Math.round(w * scale)));
+  const sampleH = Math.max(100, Math.min(300, Math.round(h * scale)));
   const canvas = document.getElementById('sampleCanvas');
   if (!canvas) throw new Error('采样画布不存在');
-  canvas.width = w; canvas.height = h;
+  canvas.width = sampleW; canvas.height = sampleH;
   let ctx;
   try {
     ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -238,16 +395,38 @@ function samplePixels(img) {
     ctx = canvas.getContext('2d');
   }
   if (!ctx) throw new Error('无法创建 Canvas 上下文');
-  ctx.drawImage(img, 0, 0, w, h);
-  const imageData = ctx.getImageData(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, sampleW, sampleH);
+  const imageData = ctx.getImageData(0, 0, sampleW, sampleH);
   const data = imageData.data;
   const pixels = [];
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i+3] >= 128) {
-      pixels.push([data[i], data[i+1], data[i+2]]);
+  const colorBuckets = new Map();
+  const bucketSize = 32;
+  for (let y = 0; y < sampleH; y++) {
+    for (let x = 0; x < sampleW; x++) {
+      const i = (y * sampleW + x) * 4;
+      if (data[i + 3] >= 128) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        pixels.push([r, g, b]);
+        const br = Math.floor(r / bucketSize);
+        const bg = Math.floor(g / bucketSize);
+        const bb = Math.floor(b / bucketSize);
+        const key = `${br},${bg},${bb}`;
+        if (!colorBuckets.has(key)) colorBuckets.set(key, []);
+        colorBuckets.get(key).push([r, g, b]);
+      }
     }
   }
-  state.originalPixels = pixels;
+  const enhancedPixels = [...pixels];
+  const minBucketSize = Math.max(3, Math.floor(pixels.length * 0.001));
+  for (const [key, bucket] of colorBuckets) {
+    if (bucket.length >= minBucketSize && bucket.length <= pixels.length * 0.05) {
+      const repeatFactor = Math.min(3, Math.ceil(pixels.length * 0.02 / bucket.length));
+      for (let i = 0; i < repeatFactor - 1; i++) {
+        enhancedPixels.push(...bucket);
+      }
+    }
+  }
+  state.originalPixels = enhancedPixels;
   state.totalSampled = pixels.length;
 }
 
@@ -428,7 +607,6 @@ function renderPreview() {
   const darkest = byLum[0];
   const lightest = byLum[byLum.length - 1];
   const accent = byVib[0];
-  const accent2 = byVib.length > 1 ? byVib[1] : accent;
   const nearDark = byLum.length > 1 ? byLum[1] : darkest;
   const midColors = colors.slice().sort((a, b) => Math.abs(a.lum - 0.5) - Math.abs(b.lum - 0.5));
 
@@ -447,10 +625,13 @@ function renderPreview() {
 
   const featureCardBg = lightest.lum > 0.85 ? '#f8f8f8' : lightest.hex;
   const featureText = contrastColor(
-    ...(() => { const c = featureCardBg.startsWith('#') ? (() => {
-      const v = parseInt(featureCardBg.slice(1), 16);
-      return [(v>>16)&255, (v>>8)&255, v&255];
-    })() : [245,245,245]; return c; })()
+    ...(() => {
+      if (featureCardBg.startsWith('#')) {
+        const v = parseInt(featureCardBg.slice(1), 16);
+        return [(v>>16)&255, (v>>8)&255, v&255];
+      }
+      return [245,245,245];
+    })()
   );
 
   const featColors = colors.filter(c => c.lum > 0.12 && c.lum < 0.88).slice(0, 3);
@@ -549,6 +730,7 @@ function renderPreview() {
 /**
  * 渲染 CSS 导出代码
  * 生成 :root 变量格式，包含色值、色名、占比注释
+ * 方便用户直接复制到项目中使用
  */
 function renderExport() {
   const code = document.getElementById('exportCode');
@@ -563,7 +745,15 @@ function renderExport() {
   code.textContent = css;
 }
 
-/* === 事件 === */
+/* ========================================
+   事件绑定模块
+   处理用户交互：图片切换、拖拽上传、点击上传、粘贴、控件变化等
+   ======================================== */
+
+/**
+ * 图片标签切换事件
+ * 在"原图"和"色彩简化"视图之间切换
+ */
 document.querySelectorAll('.image-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.image-tab').forEach(t => t.classList.remove('active'));
@@ -583,35 +773,46 @@ document.querySelectorAll('.image-tab').forEach(tab => {
       ctx.drawImage(src, 0, 0);
     }
   });
-});/* ========================================
-   事件绑定模块
-   处理用户交互：拖拽上传、点击上传、粘贴、控件变化等
-   ======================================== */
+});
 
 /* 上传区域交互 */
 const uploadZone = document.getElementById('uploadZone');
 const fileInput = document.getElementById('fileInput');
 
-// 点击上传区域触发文件选择
+/**
+ * 点击上传区域触发文件选择
+ * 支持键盘 Enter 和空格键触发
+ */
 uploadZone.addEventListener('click', () => fileInput.click());
 uploadZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
 
-// 文件选择变化时处理图片
+/**
+ * 文件选择变化时处理图片
+ */
 fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImage(e.target.files[0]); });
 
-// 拖拽上传 - 鼠标悬停时高亮
+/**
+ * 拖拽上传 - 鼠标悬停时高亮
+ */
 uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 
-// 拖拽上传 - 鼠标离开时取消高亮
+/**
+ * 拖拽上传 - 鼠标离开时取消高亮
+ */
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
 
-// 拖拽上传 - 释放文件时处理
+/**
+ * 拖拽上传 - 释放文件时处理图片
+ */
 uploadZone.addEventListener('drop', (e) => {
   e.preventDefault(); uploadZone.classList.remove('drag-over');
   const file = e.dataTransfer.files[0]; if (file) handleImage(file);
 });
 
-// 粘贴剪贴板图片
+/**
+ * 粘贴剪贴板图片
+ * 支持 Ctrl+V 粘贴截图或复制的图片
+ */
 document.addEventListener('paste', (e) => {
   const items = e.clipboardData?.items; if (!items) return;
   for (const item of items) {
@@ -619,16 +820,25 @@ document.addEventListener('paste', (e) => {
   }
 });
 
-/* 工具栏控件 */
+/**
+ * 工具栏控件 - 提取数量滑块
+ * input 事件实时更新显示数字，change 事件触发重新提取
+ */
 const countSlider = document.getElementById('countSlider');
 const countDisplay = document.getElementById('countDisplay');
 countSlider.addEventListener('input', () => { countDisplay.textContent = countSlider.value; });
 countSlider.addEventListener('change', () => { if (state.originalPixels.length > 0) extractAndRender(); });
 
-// 排序方式变化时重新排序
+/**
+ * 排序方式变化时重新排序
+ */
 document.getElementById('sortSelect').addEventListener('change', () => { if (state.colors.length > 0) sortAndRender(); });
 
-/* 生成配色卡按钮 */
+/**
+ * 生成配色卡按钮
+ * 将提取的颜色渲染成一张可下载的图片卡片
+ * 支持桌面端模态框和移动端简易弹窗两种展示方式
+ */
 document.getElementById('generatePaletteBtn').addEventListener('click', () => {
   if (!state.colors || state.colors.length === 0) {
     showToast('请先上传图片并提取色板');
@@ -637,6 +847,10 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
 
   const isMobile = window.innerWidth <= 600;
 
+  /**
+   * 绘制配色卡到 Canvas 并返回 DataURL
+   * 包含标题、色条、颜色卡片（色块、HEX、中文名、占比）
+   */
   function drawPaletteCard() {
     const dpr = isMobile ? 1 : 2;
     const width = isMobile ? 480 : 800;
@@ -654,13 +868,16 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
+    // 绘制背景
     ctx.fillStyle = '#f8f9fa';
     ctx.fillRect(0, 0, width, height);
 
+    // 绘制标题
     ctx.fillStyle = '#4f6479';
     ctx.font = `bold ${isMobile ? 22 : 28}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     ctx.fillText('Chromasense 配色卡', isMobile ? 20 : 40, isMobile ? 45 : 55);
 
+    // 绘制顶部色条
     const stripY = headerHeight;
     const stripWidth = width - (isMobile ? 40 : 80);
     const colorWidth = stripWidth / colors.length;
@@ -670,6 +887,7 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
       ctx.fillRect((isMobile ? 20 : 40) + index * colorWidth, stripY, colorWidth, stripHeight);
     });
 
+    // 绘制颜色卡片网格
     const cardWidth = (width - (isMobile ? 40 : 80)) / cols;
     const startY = stripY + stripHeight + (isMobile ? 20 : 50);
 
@@ -680,17 +898,21 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
       const y = startY + row * cardHeight;
       const swatchSize = isMobile ? 36 : 50;
 
+      // 色块
       ctx.fillStyle = color.hex;
       ctx.fillRect(x, y, swatchSize, swatchSize);
 
+      // HEX 值
       ctx.fillStyle = '#4f6479';
       ctx.font = `bold ${isMobile ? 14 : 14}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
       ctx.fillText(color.hex.toUpperCase(), x + swatchSize + 8, y + (isMobile ? 18 : 22));
 
+      // 中文名
       ctx.fillStyle = '#614226';
       ctx.font = `${isMobile ? 13 : 12}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
       ctx.fillText(color.name, x + swatchSize + 8, y + (isMobile ? 36 : 42));
 
+      // 占比
       ctx.fillStyle = '#a3b4c4';
       ctx.font = `${isMobile ? 12 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
       ctx.fillText(`占比 ${color.percentage}%`, x + swatchSize + 8, y + (isMobile ? 52 : 60));
@@ -699,6 +921,10 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
     return canvas.toDataURL('image/png');
   }
 
+  /**
+   * 移动端简易弹窗
+   * 使用内联样式，避免依赖 CSS 类
+   */
   if (isMobile) {
     const overlay = document.createElement('div');
     overlay.id = 'mobilePaletteOverlay';
@@ -778,6 +1004,10 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
       }
     }, 50);
   } else {
+    /**
+     * 桌面端模态框
+     * 使用 CSS 类样式，支持更丰富的交互效果
+     */
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'palette-modal-overlay';
     
@@ -836,7 +1066,10 @@ document.getElementById('generatePaletteBtn').addEventListener('click', () => {
   }
 });
 
-/* 重新上传按钮 */
+/**
+ * 重新上传按钮
+ * 清除状态，返回上传页面
+ */
 document.getElementById('reuploadBtn').addEventListener('click', () => {
   document.getElementById('resultSection').classList.remove('active');
   document.getElementById('uploadSection').style.display = '';
@@ -845,12 +1078,18 @@ document.getElementById('reuploadBtn').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-/* 复制导出代码按钮 */
+/**
+ * 复制导出代码按钮
+ * 将生成的 CSS 变量代码复制到剪贴板
+ */
 document.getElementById('exportCopyBtn').addEventListener('click', () => {
   copyText(document.getElementById('exportCode').textContent);
 });
 
-/* 全局拖拽 - 在结果页时允许重新拖拽图片 */
+/**
+ * 全局拖拽 - 在结果页时允许重新拖拽图片
+ * 支持在分析结果页面直接拖入新图片
+ */
 document.body.addEventListener('dragover', (e) => e.preventDefault());
 document.body.addEventListener('drop', (e) => {
   e.preventDefault();
